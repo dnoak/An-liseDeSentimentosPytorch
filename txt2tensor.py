@@ -23,10 +23,10 @@ class Text2Tensor:
         self.N_INPUTS = N_INPUTS
         self.MAX_TEXT_SIZE = MAX_TEXT_SIZE
         self.X = torch.zeros(
-            (self.N_INPUTS, MAX_TEXT_SIZE), dtype=torch.int32
+            (self.N_INPUTS, MAX_TEXT_SIZE), dtype=torch.long
         )
         self.y = torch.zeros(
-            (self.N_INPUTS, 1), dtype=torch.int32
+            (self.N_INPUTS), dtype=torch.long
         )
 
         with open(dict_path, 'r') as f:
@@ -74,16 +74,18 @@ class Text2Tensor:
             except: pass
 
         if y_str == 'pos':
-            return X_tensor, torch.tensor(1, dtype=torch.float32)
+            return X_tensor, torch.tensor(1, dtype=torch.long)
         else:
-            return X_tensor, torch.tensor(0, dtype=torch.float32)
+            return X_tensor, torch.tensor(0, dtype=torch.long)
 
     @_timer_decorator
     def transform_all(self):
-        for pos in range(self.N_INPUTS):
+        random_pos = np.arange(self.N_INPUTS)
+        np.random.shuffle(random_pos)
+        for rpos, pos in zip(random_pos, range(self.N_INPUTS)):
             X_str = self.imdb_reviews.iloc[pos]['text_pt']
             y_str = self.imdb_reviews.iloc[pos]['sentiment']
-            self.X[pos], self.y[pos] = self.txt2tensor(X_str, y_str)
+            self.X[rpos], self.y[rpos] = self.txt2tensor(X_str, y_str)
         return self.X, self.y
 
     def tensor2txt(self, pos):

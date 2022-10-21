@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import random
 import os
 
-os.system('clear')
+os.system('cls')
 
 device = 'cuda' if torch.cuda.is_available else 'cpu'
 print(f'{device = }')
@@ -46,7 +46,7 @@ test_dataloader = DataLoader(
 class_names = train_data.classes
 class_to_idx = train_data.class_to_idx
 
-class FashinMNISTModelV1(nn.Module):
+class FashionMNISTModelV1(nn.Module):
     def __init__(
         self,
         input_shape: int,
@@ -96,7 +96,7 @@ class FashinMNISTModelV1(nn.Module):
             nn.Flatten(), 
             nn.Linear(hidden_units*7*7, output_shape)
         )
-        
+
     def forward(self, x: torch.Tensor):
         x = self.conv_block_1(x)
         x = self.conv_block_2(x)
@@ -122,6 +122,7 @@ def train_step(
     model.train()
     for batch, (X, y) in enumerate(data_loader):
         X, y = X.to(device), y.to(device)
+        print(X.shape, y.shape)
 
         y_pred = model(X)
 
@@ -237,7 +238,7 @@ def make_predictions(
             pred_probs.append(pred_prob.cpu())
     return torch.stack(pred_probs)
 
-   
+
 def plot_predictions(pred_classes, test_labels):
     plt.figure(figsize=(9,9))
     nrows = 3
@@ -253,7 +254,7 @@ def plot_predictions(pred_classes, test_labels):
         plt.title(title_text, fontsize=10, c=c)
     plt.show()
 
-model_1 = FashinMNISTModelV1(1, 16, len(class_names)).to(device)
+model_1 = FashionMNISTModelV1(1, 16, len(class_names)).to(device)
 
 loss_fn = nn.CrossEntropyLoss()
 optmizer = torch.optim.SGD(params=model_1.parameters(), lr=0.1)

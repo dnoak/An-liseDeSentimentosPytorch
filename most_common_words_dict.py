@@ -10,15 +10,15 @@ import os
 class MostCommonWordsDict():
     def __init__(
         self,
-        VOCAB_SIZE : int = 10,
-        dataset_path : str = 'data/imdb-reviews-pt-br.csv'
+        vocab_size: int = 10,
+        dataset_path: str = 'data/imdb-reviews-pt-br.csv'
         ):
         '''
         blabla
         '''
-        self.VOCAB_SIZE = VOCAB_SIZE
+        self.vocab_size = vocab_size
         self.ptbr_dict = {}
-        self.txt_inputs = pd.read_csv(dataset_path)[0:self.VOCAB_SIZE]
+        self.txt_inputs = pd.read_csv(dataset_path)[0:self.vocab_size]
 
     def remove_symbols(self, texts):
         all_words = []
@@ -31,7 +31,7 @@ class MostCommonWordsDict():
         all_words = self.remove_symbols(self.txt_inputs['text_pt'])
 
         count_words = Counter(all_words)
-        sorted_words = count_words.most_common(self.VOCAB_SIZE)
+        sorted_words = count_words.most_common(self.vocab_size)
         self.ptbr_dict = { word[0]: i+1 for i, word in enumerate(sorted_words) }
 
         return self.ptbr_dict
@@ -43,7 +43,7 @@ class MostCommonWordsDict():
 def main():
     os.system('cls') if os.name == 'nt' else os.system('clear')
 
-    A = MostCommonWordsDict(VOCAB_SIZE=500)
+    A = MostCommonWordsDict(vocab_size=500)
     words_dict = A.generate_dict()
     A.save_dict()
     [print(f'{i}: {words_dict[i]}') for i, _ in zip(words_dict, range(30))]
