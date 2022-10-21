@@ -15,27 +15,26 @@ os.system('cls') if os.name == 'nt' else os.system('clear')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f' -- Using {device} --')
 
-vocab_size=10000
+vocab_size = 10000
+vocab_size += 1
 n_inputs = 5000
 
-MCWD = MostCommonWordsDict(vocab_size)
-ptbr_dict = MCWD.generate_dict()
-T2T = Text2Tensor(N_INPUTS=int(n_inputs * 1.1))
-T2T.transform_all()
-X_text, y_text = T2T.X, T2T.y
+batch_size = 20
 
-batch_size = 50
-
-embedding_dim = 100
-vocab_size = len(ptbr_dict)+1
-hidden_size_lstm = 64 # 64
-num_layers_lstm = 2 # 2
+embedding_dim = 200
+hidden_size_lstm = 256 # 64
+num_layers_lstm = 8 # 2
 output_shape = 1
 
 lr = 0.001
 clip = 5
 epochs = 1000
 
+MCWD = MostCommonWordsDict(vocab_size)
+ptbr_dict = MCWD.generate_dict()
+T2T = Text2Tensor(N_INPUTS=int(n_inputs * 1.1))
+T2T.transform_all()
+X_text, y_text = T2T.X, T2T.y
 
 data = {
     **{
@@ -124,16 +123,17 @@ class SentimentalAnalysisNet(nn.Module):
             batch_first = True,
             dropout = dropout_lstm
         )
+        self.batch_normalization = nn.BatchNorm1d(hidden_size_lstm)
 
         self.dropout = nn.Dropout(0.3)
 
         self.linear_layer_stack = nn.Sequential(
-            nn.Linear(hidden_size_lstm, 64),
+            nn.Linear(hidden_size_lstm, output_shape),
             nn.Sigmoid(),
-            nn.Linear(64, 16),
-            nn.Sigmoid(),
-            nn.Linear(16, output_shape),
-            nn.Sigmoid(),
+            #nn.Linear(64, 16),
+            #nn.Sigmoid(),
+            #nn.Linear(16, output_shape),
+            #nn.Sigmoid(),
         )
 
     def forward(self, x, hidden):
@@ -144,7 +144,9 @@ class SentimentalAnalysisNet(nn.Module):
 
         lstm_out, hidden = self.lstm(embedd, hidden)
         lstm_out = lstm_out.contiguous().view(-1, self.hidden_size_lstm)
-        x = self.dropout(lstm_out)
+        x = self.batch_normalization(lstm_out)
+        #x = self.dropout(lstm_out)
+        x = self.dropout(x)
         x = self.linear_layer_stack(x)
         x = x.view(batch_size, -1)
         x = x[:, -1]
@@ -247,7 +249,7 @@ def test_step(
         test_acc /= len(test_dataloader)
         
         print(f'{test_loss = :.2f}, {test_acc = :.2f}%')
-        print(f'{y.cpu().numpy()}\n{torch.round(test_pred).long().cpu().numpy()}')
+        print(f'{y.cpu().numpy()[0:20]}\n{torch.round(test_pred).long().cpu().numpy()[0:20]}')
     
     # print(test_acc, best_model['acc'])
     # if test_acc >= best_model['acc'] - 0.2:
@@ -265,7 +267,7 @@ model_0 = SentimentalAnalysisNet(
 print(model_0)
 
 loss_fn = nn.BCELoss()
-optimizer = torch.optim.Adam(model_0.parameters(), lr = lr)
+optimizer = torch.optim.Adam(model_0.parameters(), lr=lr)
 
 best_model = {'acc': 0, 'model': model_0}
 for epoch in range(epochs):
