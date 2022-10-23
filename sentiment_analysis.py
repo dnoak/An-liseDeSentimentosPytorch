@@ -109,6 +109,7 @@ class SentimentAnalysisNN(nn.Module):
     def __init__(
         self,
         device: torch.device,
+        #batch_size: int,
         input_shape: int, 
         output_shape: int, 
         embedding_dim: int,
@@ -121,11 +122,12 @@ class SentimentAnalysisNN(nn.Module):
         '''
         super().__init__()
         self.device = device
-
+        self.batch_size = None
         self.num_layers_lstm = num_layers_lstm
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.hidden_size_lstm = hidden_size_lstm
+        
         
         self.embedding = nn.Embedding(input_shape, embedding_dim)
         self.lstm = nn.LSTM(
@@ -149,8 +151,7 @@ class SentimentAnalysisNN(nn.Module):
         )
 
     def forward(self, x, hidden):
-        #batch_size = batch_size #x.size()
-        #print(1, batch_size)
+        batch_size = x.size()
         embedd = self.embedding(x)
 
         lstm_out, hidden = self.lstm(embedd, hidden)
@@ -278,12 +279,12 @@ def test_step(
             model_state_dict=model.state_dict(),
             optimizer_state_dict=optimizer.state_dict(),
             )'''
-    '''save_model(
+    save_model(
         epoch=epoch, 
         loss=test_loss,
         model_state_dict=model.state_dict(),
         optimizer_state_dict=optimizer.state_dict(),
-        )'''
+        )
 
 
 @torch.inference_mode()
@@ -303,7 +304,6 @@ def validation_step(
     #with torch.inference_mode():
     for X, y in validation_dataloader:
         X, y = X.to(device), y.to(device)
-        print(X.shape)
 
         hidden = tuple([each.data for each in hidden])
 
@@ -377,6 +377,8 @@ def prediction_loop():
 
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    #hidden = model.init_hidden(batch_size)
     model.eval()
     while True:
 
@@ -396,14 +398,14 @@ def prediction_loop():
 if __name__ == '__main__':
     os.system('cls') if os.name == 'nt' else os.system('clear')
     
-    vocab_size = 500
+    vocab_size = 5000
     vocab_size += 1 # novo id (0) para palavras não existentes no vocabulário
     max_text_size = 256
-    n_text_inputs = 400
+    n_text_inputs = 40000
 
-    batch_size = 1
+    batch_size = 1000
 
-    embedding_dim = 100
+    embedding_dim = 50
     hidden_size_lstm = 64 # 64
     num_layers_lstm = 2 # 2
     output_shape = 1
@@ -449,7 +451,7 @@ if __name__ == '__main__':
             optimizer_state_dict=optimizer.state_dict()
             )
     
-    #train_neural_network()
-    prediction_loop()
+    train_neural_network()
+    #prediction_loop()
 
     

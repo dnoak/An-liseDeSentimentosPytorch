@@ -49,12 +49,12 @@ class Text2Tensor:
         '''
         X_words = ' '.join(self.remove_symbols([X_text])).split()[0:self.max_text_size]
 
-        # without words discontinuation
+        # Sem descontinuação de palavras
         # X_ids = [self.dictionary.get(w, 0) for w, _ in zip(X_words, range(self.max_text_size))]
         # X_ids_no_zeros = [id for id in X_ids if id]
         # X_ids_no_zeros_max_size = X_ids_no_zeros + [0]*(self.max_text_size - len(X_ids_no_zeros))
         
-        # with words discontinuation
+        # Palavras contínuas
         X_ids = [self.dictionary.get(w, 0) for w, _ in zip(X_words, range(self.max_text_size))]
         X_ids_max_size = X_ids + [0]*(self.max_text_size - len(X_ids))
 

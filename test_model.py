@@ -1,6 +1,6 @@
 from calendar import c
 from text2tensor import Text2Tensor
-from word_embedding import SentimentAnalysisNN
+from sentiment_analysis import SentimentAnalysisNN
 import torch
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -21,15 +21,15 @@ def predition_step(
         #hidden = tuple([each.data for each in hidden])
 
         X = data.to(device).unsqueeze(dim=0)
-        print(X.shape)
         validation_pred, hidden = model(X, hidden)
 
         print(validation_pred)
+    return torch.round(validation_pred).long().item()
 
-vocab_size = 500
+vocab_size = 5000
 vocab_size += 1 # novo id (0) para palavras não existentes no vocabulário
 
-embedding_dim = 100
+embedding_dim = 50
 hidden_size_lstm = 64
 num_layers_lstm = 2
 output_shape = 1
@@ -55,12 +55,12 @@ t2t = Text2Tensor(
     max_text_size=256
 )
 
-while True:
-    text = input('Text: ')
+def response(text):
+    #text = input('Text: ')
 
     text_tensor, _ = t2t.text2tensor(text, 'pos')
 
-    predition_step(model, text_tensor, device)
+    return predition_step(model, text_tensor, device)
 
 
 
