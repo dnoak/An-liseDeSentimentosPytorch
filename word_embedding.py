@@ -1,6 +1,6 @@
-from random import seed
 from most_common_words_dict import MostCommonWordsDict
-from txt2tensor import Text2Tensor
+from text2tensor import Text2Tensor
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,88 +9,100 @@ from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 from tqdm.auto import tqdm
 import copy
+import json
 import os
 
-os.system('cls') if os.name == 'nt' else os.system('clear')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print(f' -- Using {device} --')
-
-vocab_size = 10000
-vocab_size += 1
-n_inputs = 5000
-
-batch_size = 20
-
-embedding_dim = 200
-hidden_size_lstm = 256 # 64
-num_layers_lstm = 8 # 2
-output_shape = 1
-
-lr = 0.001
-clip = 5
-epochs = 1000
-
-MCWD = MostCommonWordsDict(vocab_size)
-ptbr_dict = MCWD.generate_dict()
-T2T = Text2Tensor(N_INPUTS=int(n_inputs * 1.1))
-T2T.transform_all()
-X_text, y_text = T2T.X, T2T.y
-
-data = {
-    **{
-        s: l for s, l in zip(
-            ['X train', 'X test', 'y train', 'y test'],
-            train_test_split(
-                X_text[:int(n_inputs*0.9)].to(device),
-                y_text[:int(n_inputs*0.9)].to(device),
-                test_size=0.2,
-                random_state=1
-            )
-        )
-    },
-    'X eval': X_text[int(-n_inputs*0.1):].to(device),  
-    'y eval': y_text[int(-n_inputs*0.1):].to(device),
-}
+print(f' ____Using {device}____')
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, X, y):
-       self.X = X
-       self.y = y
-    
+        self.X = X
+        self.y = y
+
     def __len__(self):
         return len(self.y)
-    
+
     def __getitem__(self, index):
         X = self.X[index]
         y = self.y[index]
         return X, y
 
-dataloader = {
-    'train': DataLoader(
-        Dataset(data['X train'], data['y train']), 
-        batch_size=batch_size,
-        shuffle=True
-    ),
-    'test': DataLoader(
-        Dataset(data['X test'], data['y test']),
-        batch_size=batch_size,
-        shuffle=True
-    ),
-    'eval': DataLoader(
-        Dataset(data['X eval'], data['y eval']),
-        batch_size=batch_size,
-        shuffle=True
-    )
-}
+class SplitDataset():
+    def __init__(
+        self, dataset_path, X_col, y_col, batch_size, 
+        dict_path, n_text_inputs, max_text_size,
+        split_proportion = [[0, 0.6], [0.6, 0.8], [0.8, 1]],
+        ):
+        '''
+        blablalbal
+        '''
+        self.dataset_path = dataset_path
+        self.X_col = X_col
+        self.y_col = y_col
+        self.batch_size = batch_size
+        self.dict_path = dict_path
+        self.n_text_inputs = n_text_inputs
+        self.max_text_size = max_text_size
+        self.split_proportion = split_proportion
 
-#[print(d,'-', len(data[d])) for d in data]
+        self.dataset = {}
+        self.dataloader = {}
+
+    def load_dataset(self):
+        ...
+
+    def create_dataset(self):
+        t2t = Text2Tensor(
+            dict_path=self.dict_path,
+            dataset_path=self.dataset_path,
+            X_col=self.X_col,
+            y_col=self.y_col,
+            n_text_inputs=self.n_text_inputs,
+            max_text_size=self.max_text_size
+        )
+
+        t2t.transform_all()
+        X_text, y_text = t2t.X, t2t.y
+
+        self.dataset = {
+            **{
+                X_ttv : X_text[int(p[0]*self.n_text_inputs):int(p[1]*self.n_text_inputs)] 
+                for X_ttv, p in zip(
+                    ['X train', 'X test', 'X validation'],
+                    self.split_proportion)
+            },
+
+            **{
+                y_ttv : y_text[int(p[0]*self.n_text_inputs):int(p[1]*self.n_text_inputs)]
+                for y_ttv, p in zip(
+                    ['y train', 'y test', 'y validation'],
+                    self.split_proportion)
+            },
+        }
+        return self.dataset
+    
+    def create_dataloader(self):
+        self.dataloader = {
+            'train': DataLoader(
+                Dataset(self.dataset['X train'], self.dataset['y train']), 
+                batch_size=self.batch_size,
+                shuffle=True),
+
+            'test': DataLoader(
+                Dataset(self.dataset['X test'], self.dataset['y test']),
+                batch_size=self.batch_size,
+                shuffle=True),
+
+            'validation': DataLoader(
+                Dataset(self.dataset['X validation'], self.dataset['y validation']),
+                batch_size=self.batch_size,
+                shuffle=True),
+        }
+        return self.dataloader
 
 
-#train_data = TensorDataset(data['X train'], data['y train'])
-#test_data = TensorDataset(data['X test'], data['y test'])
-
-
-class SentimentalAnalysisNet(nn.Module):
+class SentimentAnalysisNN(nn.Module):
     '''
     dadsdasda
     '''
@@ -115,9 +127,9 @@ class SentimentalAnalysisNet(nn.Module):
         self.output_shape = output_shape
         self.hidden_size_lstm = hidden_size_lstm
         
-        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.embedding = nn.Embedding(input_shape, embedding_dim)
         self.lstm = nn.LSTM(
-            input_size = embedding_dim, 
+            input_size = embedding_dim,
             hidden_size = hidden_size_lstm, 
             num_layers = num_layers_lstm,
             batch_first = True,
@@ -137,15 +149,13 @@ class SentimentalAnalysisNet(nn.Module):
         )
 
     def forward(self, x, hidden):
-        batch_size = x.size()
-
+        #batch_size = batch_size #x.size()
+        #print(1, batch_size)
         embedd = self.embedding(x)
-        #print(embedd.shape, hidden[0].shape)
 
         lstm_out, hidden = self.lstm(embedd, hidden)
         lstm_out = lstm_out.contiguous().view(-1, self.hidden_size_lstm)
         x = self.batch_normalization(lstm_out)
-        #x = self.dropout(lstm_out)
         x = self.dropout(x)
         x = self.linear_layer_stack(x)
         x = x.view(batch_size, -1)
@@ -154,6 +164,7 @@ class SentimentalAnalysisNet(nn.Module):
         return x, hidden
     
     def init_hidden(self, batch_size):
+        #print(2, batch_size)
         weight = next(self.parameters()).data
 
         hidden = (
@@ -162,6 +173,7 @@ class SentimentalAnalysisNet(nn.Module):
                 batch_size, 
                 self.hidden_size_lstm
                 ).zero_().to(self.device),
+            
             weight.new(
                 self.num_layers_lstm, 
                 batch_size, 
@@ -170,8 +182,16 @@ class SentimentalAnalysisNet(nn.Module):
             )
         return hidden
 
+def save_model(epoch, loss, model_state_dict, optimizer_state_dict):
+    torch.save({
+        'epoch': epoch,
+        'loss': loss,
+        'model_state_dict': model_state_dict,
+        'optimizer_state_dict': optimizer_state_dict,
+    }, global_model_path)
+
 def accuracy_fn(y_true, y_pred):
-    y_pred = torch.round(y_pred).long()#torch.as_tensor((y_pred-0.5)>0, dtype=torch.long)
+    y_pred = torch.round(y_pred).long()
     correct = torch.eq(y_true, y_pred).sum().item()
     acc = (correct / len(y_pred)) * 100
     return acc
@@ -179,114 +199,257 @@ def accuracy_fn(y_true, y_pred):
 def train_step(
     model: torch.nn.Module,
     epoch: int,
+    batch_size: int,
     train_dataloader: torch.utils.data.DataLoader,
     loss_fn: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
+    clip_value: int,
     accuracy_fn,
     device: torch.device = device,
     ):
-    # global best_model
     
-    # model = best_model['model']
     train_loss, train_acc = 0, 0
     hidden = model.init_hidden(batch_size)
+
     model.train()
     for batch, (X, y) in enumerate(train_dataloader):
         X, y = X.to(device), y.to(device)
 
         hidden = tuple([each.data for each in hidden])
 
-        y_pred, hidden = model(X, hidden)
+        train_pred, hidden = model(X, hidden)
         
-        loss = loss_fn(y_pred.squeeze(), y.float())
+        loss = loss_fn(train_pred, y.float())
         train_loss += loss
-        train_acc += accuracy_fn(y, y_pred)
+        train_acc += accuracy_fn(y, train_pred)
 
         optimizer.zero_grad()
 
         loss.backward()
 
-        nn.utils.clip_grad_norm_(model_0.parameters(), clip)
+        nn.utils.clip_grad_norm_(model.parameters(), clip_value)
 
         optimizer.step()
 
     train_loss /= len(train_dataloader)
     train_acc /= len(train_dataloader)
 
-    print(f'{epoch = }, {train_loss = :.2f}, {train_acc = :.2f}%,', end=' ')
-    
-    # if train_acc >= best_model['acc']:
-    #     best_model = {'acc': train_acc, 'model': model}
-    
+    print(f'\n{" "*15}epoch: {epoch}')
+    print(f'train      | loss: {train_loss:.2f} | acc: {train_acc:.2f}%')
+
+@torch.inference_mode()
 def test_step(
     model: torch.nn.Module,
+    tolerance: float,
     epoch: int,
+    batch_size: int,
     test_dataloader: torch.utils.data.DataLoader,
     loss_fn: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     accuracy_fn,
     device: torch.device = device,
     ):
-    global best_model
-    
-    #model = best_model['model']
 
     test_loss, test_acc = 0, 0
     hidden = model.init_hidden(batch_size)
+
     model.eval()
-    with torch.inference_mode():
-        for X, y in test_dataloader:
-            X, y = X.to(device), y.to(device)
+    for X, y in test_dataloader:
+        X, y = X.to(device), y.to(device)
 
-            hidden = tuple([each.data for each in hidden])
+        hidden = tuple([each.data for each in hidden])
 
-            test_pred, hidden = model(X, hidden)
+        test_pred, hidden = model(X, hidden)
 
-            test_loss += loss_fn(test_pred.squeeze(), y.float())
-            test_acc += accuracy_fn(y, test_pred)
-        
-        test_loss /= len(test_dataloader)
-        test_acc /= len(test_dataloader)
-        
-        print(f'{test_loss = :.2f}, {test_acc = :.2f}%')
-        print(f'{y.cpu().numpy()[0:20]}\n{torch.round(test_pred).long().cpu().numpy()[0:20]}')
+        test_loss += loss_fn(test_pred, y.float())
+        test_acc += accuracy_fn(y, test_pred)
     
-    # print(test_acc, best_model['acc'])
-    # if test_acc >= best_model['acc'] - 0.2:
-    #     model = copy.deepcopy(best_model['model'])
-    #     best_model = {'acc': test_acc, 'model': copy.deepcopy(model)}
+    test_loss /= len(test_dataloader)
+    test_acc /= len(test_dataloader)
 
-model_0 = SentimentalAnalysisNet(
-    device=device,
-    input_shape=vocab_size,
-    output_shape=output_shape,
-    embedding_dim=embedding_dim,
-    hidden_size_lstm=hidden_size_lstm,
-).to(device)
+    print(f'test       | loss: {test_loss:.2f} | acc: {test_acc:.2f}%')
 
-print(model_0)
+    best_loss = torch.load(global_model_path)['loss']
 
-loss_fn = nn.BCELoss()
-optimizer = torch.optim.Adam(model_0.parameters(), lr=lr)
+    '''if test_loss < best_loss + tolerance: #- tolerance:
+        save_model(
+            epoch=epoch, 
+            loss=test_loss,
+            model_state_dict=model.state_dict(),
+            optimizer_state_dict=optimizer.state_dict(),
+            )'''
+    '''save_model(
+        epoch=epoch, 
+        loss=test_loss,
+        model_state_dict=model.state_dict(),
+        optimizer_state_dict=optimizer.state_dict(),
+        )'''
 
-best_model = {'acc': 0, 'model': model_0}
-for epoch in range(epochs):
-    train_step(
-        model=model_0,
-        epoch=epoch,
-        train_dataloader=dataloader['train'],
-        loss_fn=loss_fn,
-        optimizer=optimizer,
-        accuracy_fn=accuracy_fn,
-        device=device
+
+@torch.inference_mode()
+def validation_step(
+    model: torch.nn.Module,
+    batch_size: int,
+    validation_dataloader: torch.utils.data.DataLoader,
+    loss_fn: torch.nn.Module,
+    accuracy_fn,
+    device: torch.device = device,
+    ):
+
+    #model = copy.deepcopy(model)
+    validation_loss, validation_acc = 0, 0
+    hidden = model.init_hidden(batch_size)
+    model.eval()
+    #with torch.inference_mode():
+    for X, y in validation_dataloader:
+        X, y = X.to(device), y.to(device)
+        print(X.shape)
+
+        hidden = tuple([each.data for each in hidden])
+
+        validation_pred, hidden = model(X, hidden)
+
+        validation_loss += loss_fn(validation_pred, y.float())
+        validation_acc += accuracy_fn(y, validation_pred)
+
+    validation_loss /= len(validation_dataloader)
+    validation_acc /= len(validation_dataloader)
+
+    print(f'validation | loss: {validation_loss:.2f} | acc: {validation_acc:.2f}%')
+    print(f'{" "*15}sample:')
+    print(f'{y.cpu().numpy()[0:20]}')
+    print(f'{torch.round(validation_pred).long().cpu().numpy()[0:20]}\n')
+
+def train_neural_network():
+    for epoch in range(epochs):
+        '''checkpoint = torch.load(global_model_path)
+        best_loss = checkpoint['loss']
+
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])'''
+        
+        train_step(
+            model=model,
+            epoch=epoch,
+            batch_size=batch_size,
+            train_dataloader=dataloader['train'],
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            clip_value=clip_value,
+            accuracy_fn=accuracy_fn,
+            device=device
+        )
+
+        test_step(
+            model=model,
+            tolerance=tolerance,
+            epoch=epoch,
+            batch_size=batch_size,
+            test_dataloader=dataloader['test'],
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            accuracy_fn=accuracy_fn,
+            device=device
+        )
+
+        validation_step(
+            model=model,
+            batch_size=batch_size,
+            validation_dataloader=dataloader['validation'],
+            loss_fn=loss_fn,
+            accuracy_fn=accuracy_fn,
+            device=device
+        )
+
+@torch.inference_mode()
+def prediction_loop():
+    t2t = Text2Tensor(
+        dict_path=f'data\ptbr\ptbr_imdb_{vocab_size-1}.json',
+        dataset_path='data\imdb\imdb-reviews-pt-br.csv',
+        X_col='text_pt',
+        y_col='sentiment',
+        n_text_inputs=1,
+        max_text_size=256
     )
 
-    test_step(
-        model=model_0,
-        epoch=epoch,
-        test_dataloader=dataloader['test'],
-        loss_fn=loss_fn,
-        optimizer=optimizer,
-        accuracy_fn=accuracy_fn,
-        device=device
+    checkpoint = torch.load(global_model_path)
+    best_loss = checkpoint['loss']
+
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    model.eval()
+    while True:
+
+        text_tensor, _ = t2t.text2tensor(input('Text: '), 'pos')
+        text_tensor = text_tensor.to(device).unsqueeze(dim=0)
+
+        hidden = model.init_hidden(batch_size)
+        hidden = tuple([each.data for each in hidden])
+
+        validation_pred, hidden = model(text_tensor, hidden)
+        if torch.round(validation_pred).int():
+            print('Positivo')
+        else:
+            print('Negativo')
+
+
+if __name__ == '__main__':
+    os.system('cls') if os.name == 'nt' else os.system('clear')
+    
+    vocab_size = 500
+    vocab_size += 1 # novo id (0) para palavras não existentes no vocabulário
+    max_text_size = 256
+    n_text_inputs = 400
+
+    batch_size = 1
+
+    embedding_dim = 100
+    hidden_size_lstm = 64 # 64
+    num_layers_lstm = 2 # 2
+    output_shape = 1
+
+    lr = 0.001
+    clip_value = 5
+    epochs = 1000
+    tolerance = 0.001
+
+    data = SplitDataset(
+        dataset_path='data\imdb\imdb-reviews-pt-br.csv',
+        X_col='text_pt',
+        y_col='sentiment',
+        batch_size=batch_size,
+        dict_path=f'data\ptbr\ptbr_imdb_{vocab_size-1}.json',
+        n_text_inputs=n_text_inputs,
+        max_text_size=max_text_size,
     )
+
+    dataset = data.create_dataset()
+    dataloader = data.create_dataloader()
+
+    model = SentimentAnalysisNN(
+        device=device,
+        input_shape=vocab_size,
+        output_shape=output_shape,
+        embedding_dim=embedding_dim,
+        hidden_size_lstm=hidden_size_lstm,
+    ).to(device)
+    
+    global_model_path = f'data/models/{type(model).__name__}.pt'
+
+    print(model)
+
+    loss_fn = nn.BCELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    if not os.path.exists(global_model_path):
+        save_model(
+            epoch=0,
+            loss=100,
+            model_state_dict=model.state_dict(),
+            optimizer_state_dict=optimizer.state_dict()
+            )
+    
+    #train_neural_network()
+    prediction_loop()
+
+    
